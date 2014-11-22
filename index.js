@@ -9,7 +9,7 @@ var MarketDefense = {
 };
 
 window.addEventListener('load', function() {
-  var game = new Phaser.Game(400, 400, Phaser.AUTO, 'container');
+  var game = new Phaser.Game(720, 600, Phaser.AUTO, 'container');
   window.game = game;
 
   game.state.add('boot', MarketDefense.Boot);

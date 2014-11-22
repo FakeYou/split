@@ -10,7 +10,7 @@ var MarketDefense = {
 };
 
 window.addEventListener('load', function() {
-  var game = new Phaser.Game(400, 400, Phaser.AUTO, 'container');
+  var game = new Phaser.Game(720, 600, Phaser.AUTO, 'container');
   window.game = game;
 
   game.state.add('boot', MarketDefense.Boot);
@@ -19,7 +19,181 @@ window.addEventListener('load', function() {
 
   game.state.start('boot');
 });
-},{"./lib/states/boot":2,"./lib/states/play":3,"./lib/states/preload":4,"underscore":5}],2:[function(require,module,exports){
+},{"./lib/states/boot":5,"./lib/states/play":6,"./lib/states/preload":7,"underscore":8}],2:[function(require,module,exports){
+'use strict';
+
+var Point = require('./point');
+var _ = require('underscore');
+
+var Level = function(game, width, height) {
+  this.game = game;
+  this.width = width;
+  this.height = height;
+};
+
+Level.prototype.preload = function() {
+};  
+
+Level.prototype.create = function() {
+  this.points = new Phaser.Group(this.game, this.game.stage, 'points');
+  this.points.x = 40;
+  this.points.y = 40;
+  this.spacing = 80;
+
+  this._placePoints();
+  this._assignConnections();
+
+  this.entrance = _.sortBy(this.points.children, function(point) {
+    return point.x;
+  })[0];
+
+  this.exit = _.sortBy(this.points.children, function(point) {
+    return -point.x;
+  })[0];
+};
+
+Level.prototype.update = function() {
+};
+
+Level.prototype._placePoints = function() {
+  var k = 0;
+
+  for(var i = 0; i < this.height; i++) {
+    var amount = this.width - Math.abs(i - Math.floor(this.height / 2));
+    for(var j = 0; j < amount; j++) {
+      var x = j * this.spacing + ((this.width - amount) * this.spacing / 2);
+      var y = i * this.spacing;
+
+      var point = new Point(this.game, x, y, k);
+      point.create();
+      this.points.add(point);
+
+      k += 1;
+    }
+  }
+};
+
+Level.prototype._assignConnections = function() {
+  for(var i = 0; i < this.points.children.length; i++) {
+    var point = this.points.children[i];
+
+    var positions = [
+      { x: point.x + this.spacing / 2, y: point.y - this.spacing }, // above
+      { x: point.x + this.spacing / 2, y: point.y + this.spacing }, // below
+      { x: point.x + this.spacing, y: point.y } // infront
+    ];
+
+    for(var j = 0; j < positions.length; j++) {
+      var other = _.findWhere(this.points.children, positions[j]);
+
+      if(other) {
+        point.addConnected(other);
+      }
+    }
+  }
+};
+
+module.exports = Level;
+
+},{"./point":4,"underscore":8}],3:[function(require,module,exports){
+'use strict';
+
+var Line = function(game, level) {
+  this.level = level;
+  this.color = 0xff0099;
+  this.points = [];
+
+  Phaser.Graphics.call(this, game, 0, 0);
+  game.add.existing(this);
+};
+
+Line.prototype = Object.create(Phaser.Graphics.prototype);
+Line.prototype.constructor = Line;
+
+Line.prototype.create = function() {
+  this.pointer = { 
+    x: this.level.entrance.x + this.level.points.x,
+    y: this.level.entrance.y + this.level.points.y
+  };
+};
+
+Line.prototype.update = function() {
+  this.clear();
+  this.beginFill(this.color);
+  this.drawCircle(this.pointer.x, this.pointer.y, 20);
+  this.endFill();
+
+  if(this.tween && !this.tween.isRunning) {
+    delete this.tween;
+  }
+};
+
+Line.prototype.addPoint = function(point) {
+  this.points.push(point);
+};
+
+Line.prototype.play = function() {
+  this.tween = this.game.add.tween(this.pointer);
+  console.log(this.tween);
+
+  while(this.points.length > 0) {
+    var point = this.points.shift();
+    this.tween.to({ x: point.world.x, y: point.world.y }, 2000, Phaser.Easing.Linear.None);
+  }
+
+  this.tween.start();
+};
+
+module.exports = Line;
+},{}],4:[function(require,module,exports){
+'use strict';
+
+var Point = function(game, x, y, index) {
+  this.radius = 10;
+  this.color = 0xFFC700;
+  this.index = index;
+  this.connected = [];
+
+  x = x - this.radius / 2;
+  y = y - this.radius / 2;
+
+  Phaser.Graphics.call(this, game, x, y);
+  game.add.existing(this);
+};
+
+Point.prototype = Object.create(Phaser.Graphics.prototype);
+Point.prototype.constructor = Point;
+
+Point.prototype.create = function() {
+  var text = new Phaser.Text(this.game, this.x + 50, this.y + 40, '' + this.index);
+  text.fontSize = 10;
+  text.addColor('#ffffff', 0);
+  this.game.add.existing(text);
+};
+
+Point.prototype.update = function() {
+  this.clear();
+  
+  this.beginFill(this.color);
+  this.drawCircle(0, 0, this.radius);
+  this.endFill();
+
+  this.lineStyle(1, 0x0000FF, 1);
+
+  for(var i = 0; i < this.connected.length; i++) {
+    var connected = this.connected[i];
+
+    this.moveTo(0, 0);
+    this.lineTo(connected.x - this.x, connected.y - this.y);
+  }
+};
+
+Point.prototype.addConnected = function(point) {
+  this.connected.push(point);
+};
+
+module.exports = Point;
+},{}],5:[function(require,module,exports){
 'use strict';
 
 var Boot = function(game) {
@@ -32,12 +206,17 @@ Boot.prototype.preload = function() {
 };
 
 Boot.prototype.create = function() {
+  this.game.stage.backgroundColor = 0x1E222B;
+
   this.state.start('preload');
 };
 
 module.exports = Boot;
-},{}],3:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 'use strict';
+
+var Level = require('../level');
+var Line = require('../line');
 
 var Play = function(game) {
   this.game = game;
@@ -47,13 +226,19 @@ Play.prototype.preload = function() {
 };  
 
 Play.prototype.create = function() {
+  this.level = new Level(this.game, 8, 5);
+  this.level.create();
+
+  this.line = new Line(this.game, this.level);
+  this.line.create();
 };
 
 Play.prototype.update = function() {
+  this.level.update();
 };
 
 module.exports = Play;
-},{}],4:[function(require,module,exports){
+},{"../level":2,"../line":3}],7:[function(require,module,exports){
 'use strict';
 
 var Preload = function(game) {
@@ -76,6 +261,8 @@ Preload.prototype.preload = function() {
   this.progressBar.x = this.world.centerX;
 
   this.load.setPreloadSprite(this.progressBar);
+
+  this.load.image('point', 'assets/point.png');
 };
 
 Preload.prototype.create = function() {
@@ -89,7 +276,7 @@ Preload.prototype.update = function() {
 };
 
 module.exports = Preload;
-},{}],5:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 //     Underscore.js 1.7.0
 //     http://underscorejs.org
 //     (c) 2009-2014 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
